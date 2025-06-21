@@ -1,29 +1,36 @@
 {
   "expo": {
-    "name": "my-app",
-    "slug": "my-app",
+    "name": "SnapCook AI",
+    "slug": "snapcook-ai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ahmetyavas.snapcookai",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "We need access to your camera to analyze ingredients from photos",
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to analyze ingredients from saved photos"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
     }
   }
 }
