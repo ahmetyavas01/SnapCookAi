@@ -1,7 +1,9 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { User, registerDevice, getUserInfo, getStoredToken, clearStoredToken } from '../services/authService';
+import KeyManagementService from '../services/keyManagementService';
+import { GOOGLE_CLOUD_API_KEY, OPENAI_API_KEY } from '@env';
 
 interface AuthContextType {
   isLoading: boolean;
@@ -11,25 +13,20 @@ interface AuthContextType {
   login: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUserInfo: () => Promise<void>;
+  loading: boolean;
+  error: string | null;
+  initializeAuth: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  isLoading: true,
-  isAuthenticated: false,
-  user: null,
-  token: null,
-  login: async () => {},
-  logout: async () => {},
-  refreshUserInfo: async () => {},
-});
-
-export const useAuth = () => useContext(AuthContext);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const generateDeviceId = async (): Promise<string> => {
     const deviceId = await Device.modelId();
@@ -78,40 +75,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const storedToken = await getStoredToken();
-        if (storedToken) {
-          setToken(storedToken);
-          const userData = await getUserInfo(storedToken);
-          setUser(userData);
-          setIsAuthenticated(true);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        await logout();
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  const initializeAuth = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
+      // Initialize API keys
+      const keyManager = KeyManagementService.getInstance();
+      await keyManager.setApiKey('GOOGLE_CLOUD', GOOGLE_CLOUD_API_KEY);
+      await keyManager.setApiKey('OPENAI', OPENAI_API_KEY);
+
+      const token = await getStoredToken();
+      if (token) {
+        const userData = await getUserInfo(token);
+        setUser(userData);
+        setIsAuthenticated(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred during authentication');
+      setIsAuthenticated(false);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     initializeAuth();
   }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        isLoading,
-        isAuthenticated,
-        user,
-        token,
-        login,
-        logout,
-        refreshUserInfo,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    isLoading,
+    isAuthenticated,
+    user,
+    token,
+    login,
+    logout,
+    refreshUserInfo,
+    loading,
+    error,
+    initializeAuth,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 }; 

@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SplashScreen from 'expo-splash-screen';
+import LottieView from 'lottie-react-native';
 
 import { SubscriptionProvider } from './src/context/SubscriptionContext';
 import { LoadingProvider } from './src/context/LoadingContext';
@@ -29,7 +31,10 @@ import GuideScreen from './src/screens/GuideScreen';
 
 export type RootStackParamList = {
   Guide: undefined;
+  Main: undefined;
   Home: undefined;
+  Saved: undefined;
+  Settings: undefined;
   PhotoMode: undefined;
   IngredientMode: undefined;
   DetectedIngredients: {
@@ -39,220 +44,229 @@ export type RootStackParamList = {
     recipes: Recipe[];
   };
   SavedRecipes: undefined;
-  Settings: undefined;
   Subscription: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-function MainTabs() {
+// Custom Lottie Splash Screen Component
+function LottieSplashScreen({ onFinish }: { onFinish: () => void }) {
+  useEffect(() => {
+    // Auto hide after 3 seconds
+    const timer = setTimeout(() => {
+      onFinish();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [onFinish]);
+
+  return (
+    <View style={styles.splashContainer}>
+      <LottieView
+        source={require('./assets/cooking.json')}
+        autoPlay
+        loop={false}
+        style={styles.lottieAnimation}
+        onAnimationFinish={onFinish}
+      />
+    </View>
+  );
+}
+
+function TabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: '#000000',
-          borderTopColor: '#1C1C1E',
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'Saved') {
+            iconName = focused ? 'bookmark' : 'bookmark-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
+          } else {
+            iconName = 'help-outline';
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#0A84FF',
-        tabBarInactiveTintColor: '#8E8E93',
-      }}
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: '#64748B',
+        tabBarStyle: {
+          backgroundColor: Platform.OS === 'ios' ? 'transparent' : '#1E293B',
+          borderTopWidth: 0,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 34 : 8,
+          height: Platform.OS === 'ios' ? 90 : 85,
+          position: 'absolute',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 8,
+          elevation: 8,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 8,
+          marginHorizontal: 4,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginTop: 4,
+        },
+        tabBarIconStyle: {
+          marginBottom: 2,
+        },
+        headerShown: false,
+        tabBarHideOnKeyboard: true,
+        tabBarBackground: () => (
+          Platform.OS === 'ios' ? (
+            <BlurView 
+              intensity={40}
+              tint="systemMaterialDark"
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                borderTopWidth: 1,
+                borderTopColor: 'rgba(51, 65, 85, 0.6)',
+              }}
+            />
+          ) : (
+            <View style={{
+              flex: 1,
+              backgroundColor: '#1E293B',
+              borderTopWidth: 1,
+              borderTopColor: '#334155',
+            }} />
+          )
+        ),
+      })}
     >
-      <Tab.Screen
-        name="Home"
+      <Tab.Screen 
+        name="Home" 
         component={HomeScreen}
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
-          ),
+          title: 'Home',
+          tabBarLabel: 'Home',
         }}
       />
-      <Tab.Screen
-        name="Saved"
+      <Tab.Screen 
+        name="Saved" 
         component={SavedRecipesScreen}
         options={{
-          title: "Favorites",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark" size={size} color={color} />
-          ),
+          title: 'Favorites',
+          tabBarLabel: 'Favorites',
         }}
       />
-      <Tab.Screen
-        name="Settings"
+      <Tab.Screen 
+        name="Settings" 
         component={SettingsScreen}
         options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
-          ),
+          title: 'Settings',
+          tabBarLabel: 'Settings',
         }}
       />
     </Tab.Navigator>
   );
 }
 
-// Custom tabBar to center icons and labels
-function CustomTabBar(props: BottomTabBarProps) {
-  const { state, descriptors, navigation, insets } = props;
+export default function App() {
+  const [isShowingSplash, setIsShowingSplash] = useState(true);
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Pre-load fonts, make any API calls you need to do here
+        // This is where you can initialize services, load cached data, etc.
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
+      } catch (e) {
+        console.warn(e);
+      } finally {
+        setAppIsReady(true);
+      }
+    }
+
+    prepare();
+  }, []);
+
+  const onLayoutRootView = React.useCallback(async () => {
+    if (appIsReady && !isShowingSplash) {
+      // Hide the native splash screen
+      await SplashScreen.hideAsync();
+    }
+  }, [appIsReady, isShowingSplash]);
+
+  const handleSplashFinish = () => {
+    setIsShowingSplash(false);
+  };
+
+  if (!appIsReady || isShowingSplash) {
+    return <LottieSplashScreen onFinish={handleSplashFinish} />;
+  }
+
   return (
-    <View
-      style={[
-        styles.tabBar,
-        Platform.OS === 'ios'
-          ? { backgroundColor: 'transparent' }
-          : { backgroundColor: COLORS.background.secondary },
-      ]}
-    >
-      {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
-        const label =
-          options.tabBarLabel !== undefined
-            ? options.tabBarLabel.toString()
-            : options.title !== undefined
-            ? options.title.toString()
-            : route.name;
-
-        const isFocused = state.index === index;
-
-        let iconName: any;
-        switch (route.name) {
-          case 'Home':
-            iconName = isFocused ? 'home' : 'home-outline';
-            break;
-          case 'Saved':
-            iconName = isFocused ? 'bookmark' : 'bookmark-outline';
-            break;
-          case 'Settings':
-            iconName = isFocused ? 'settings' : 'settings-outline';
-            break;
-          default:
-            iconName = 'help-outline';
-        }
-
-        // Hide Recipe tab
-        if (route.name === 'Recipe') {
-          return null;
-        }
-
-        const onPress = () => {
-          const event = navigation.emit({
-            type: 'tabPress',
-            target: route.key,
-            canPreventDefault: true,
-          });
-
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
-          }
-        };
-
-        const onLongPress = () => {
-          navigation.emit({
-            type: 'tabLongPress',
-            target: route.key,
-          });
-        };
-
-        return (
-          <View key={route.key} style={styles.tabItemContainer}>
-            <View style={styles.tabItemInner}>
-              <Ionicons
-                name={iconName}
-                size={24}
-                color={isFocused ? COLORS.systemBlue : COLORS.text.tertiary}
-                style={styles.tabIcon}
-              />
-              <View style={styles.tabLabelWrapper}>
-                <Text
-                  style={[
-                    styles.tabLabel,
-                    { color: isFocused ? COLORS.systemBlue : COLORS.text.tertiary },
-                  ]}
-                  onPress={onPress}
-                  onLongPress={onLongPress}
+    <View style={styles.container} onLayout={onLayoutRootView}>
+      <StatusBar style="light" backgroundColor="#0F172A" />
+      <AppProvider>
+        <AuthProvider>
+          <LoadingProvider>
+            <SubscriptionProvider>
+              <NavigationContainer>
+                <Stack.Navigator
+                  screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: '#0F172A' },
+                  }}
                 >
-                  {label}
-                </Text>
-              </View>
-            </View>
-            {/* Touchable area covers both icon and label */}
-            <View
-              style={StyleSheet.absoluteFill}
-              pointerEvents="box-none"
-            >
-              <View
-                style={StyleSheet.absoluteFill}
-                onTouchEnd={onPress}
-                onTouchStart={onLongPress}
-              />
-            </View>
-          </View>
-        );
-      })}
+                  <Stack.Screen name="Main" component={TabNavigator} />
+                  <Stack.Screen name="PhotoMode" component={PhotoModeScreen} />
+                  <Stack.Screen name="IngredientMode" component={IngredientModeScreen} />
+                  <Stack.Screen 
+                    name="DetectedIngredients" 
+                    component={DetectedIngredientsScreen} 
+                  />
+                  <Stack.Screen name="Recipe" component={RecipeScreen} />
+                  <Stack.Screen 
+                    name="Subscription" 
+                    component={SubscriptionScreen}
+                    options={{
+                      presentation: 'modal',
+                      animation: 'slide_from_bottom',
+                    }}
+                  />
+                  <Stack.Screen name="Guide" component={GuideScreen} />
+                </Stack.Navigator>
+              </NavigationContainer>
+            </SubscriptionProvider>
+          </LoadingProvider>
+        </AuthProvider>
+      </AppProvider>
     </View>
   );
 }
 
-export default function App() {
-  const [isFirstLaunch, setIsFirstLaunch] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    checkFirstLaunch();
-  }, []);
-
-  const checkFirstLaunch = async () => {
-    try {
-      const hasLaunched = await AsyncStorage.getItem('hasLaunched');
-      if (hasLaunched === null) {
-        await AsyncStorage.setItem('hasLaunched', 'true');
-        setIsFirstLaunch(true);
-      } else {
-        setIsFirstLaunch(false);
-      }
-    } catch (error) {
-      console.error('Error checking first launch:', error);
-      setIsFirstLaunch(false);
-    }
-  };
-
-  if (isFirstLaunch === null) {
-    return null; // Loading state
-  }
-
-  return (
-    <NavigationContainer>
-      <AuthProvider>
-        <LoadingProvider>
-          <SubscriptionProvider>
-            <AppProvider>
-              <Stack.Navigator
-                initialRouteName="Guide"
-                screenOptions={{
-                  headerShown: false,
-                  animation: 'slide_from_right',
-                }}
-              >
-                <Stack.Screen name="Guide" component={GuideScreen} />
-                <Stack.Screen name="Home" component={HomeScreen} />
-                <Stack.Screen name="PhotoMode" component={PhotoModeScreen} />
-                <Stack.Screen name="IngredientMode" component={IngredientModeScreen} />
-                <Stack.Screen name="DetectedIngredients" component={DetectedIngredientsScreen} />
-                <Stack.Screen name="Recipe" component={RecipeScreen} />
-                <Stack.Screen name="SavedRecipes" component={SavedRecipesScreen} />
-                <Stack.Screen name="Settings" component={SettingsScreen} />
-                <Stack.Screen name="Subscription" component={SubscriptionScreen} />
-              </Stack.Navigator>
-            </AppProvider>
-          </SubscriptionProvider>
-        </LoadingProvider>
-      </AuthProvider>
-    </NavigationContainer>
-  );
-}
-
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+  },
+  splashContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  lottieAnimation: {
+    width: 200,
+    height: 200,
+  },
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',

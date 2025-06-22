@@ -2,273 +2,391 @@ import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
   ScrollView,
+  ActivityIndicator,
   Platform,
-  SafeAreaView,
-  StatusBar,
+  Dimensions,
+  StyleSheet,
+  Alert,
+  Image,
 } from 'react-native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../App';
-import { COLORS } from '../utils/colors';
-import { purchaseService, SubscriptionPackage } from '../services/purchaseService';
-import { useSubscription } from '../context/SubscriptionContext';
-import LottieView from 'lottie-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../utils/colors';
+import { useSubscription } from '../context/SubscriptionContext';
+import PurchaseService, { SubscriptionPackage } from '../services/purchaseService';
+import LottieView from 'lottie-react-native';
+import UsageService from '../services/usageService';
 
-type SubscriptionScreenProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Subscription'>;
+const { width } = Dimensions.get('window');
+
+// Currency symbols mapping
+const CURRENCY_SYMBOLS = {
+  'USD': '$',
+  'EUR': '€',
+  'TRY': '₺',
+  'GBP': '£'
 };
 
-const features = [
-  {
-    id: 1,
-    title: 'Unlimited recipe generation',
-    icon: 'infinite-outline',
-    gradient: ['#667eea', '#764ba2'] as const,
-  },
-  {
-    id: 2,
-    title: 'Premium recipes & suggestions',
-    icon: 'star-outline',
-    gradient: ['#f093fb', '#f5576c'] as const,
-  },
-  {
-    id: 3,
-    title: 'Ad-free experience',
-    icon: 'remove-circle-outline',
-    gradient: ['#43e97b', '#38f9d7'] as const,
-  },
-  {
-    id: 4,
-    title: 'Nutritional information',
-    icon: 'nutrition-outline',
-    gradient: ['#4facfe', '#00f2fe'] as const,
-  },
-  {
-    id: 5,
-    title: 'Weekly meal planning',
-    icon: 'calendar-outline',
-    gradient: ['#ff9a9e', '#fecfef'] as const,
-  },
-  {
-    id: 6,
-    title: 'Personalized recipes',
-    icon: 'person-outline',
-    gradient: ['#a8edea', '#fed6e3'] as const,
-  },
+// Country flag emojis
+const COUNTRY_FLAGS = {
+  'US': '🇺🇸',
+  'CA': '🇨🇦', 
+  'TR': '🇹🇷',
+  'DEFAULT': '🌍'
+};
+
+// Country options for manual selection
+const COUNTRY_OPTIONS = [
+  { code: 'TR', name: 'Turkey', flag: '🇹🇷', currency: 'TRY' },
+  { code: 'US', name: 'United States', flag: '🇺🇸', currency: 'USD' },
+  { code: 'CA', name: 'Canada', flag: '🇨🇦', currency: 'USD' },
+  { code: 'DEFAULT', name: 'Europe (Other)', flag: '🌍', currency: 'EUR' }
 ];
 
-export default function SubscriptionScreen({ navigation }: SubscriptionScreenProps) {
+const PRICING_PLANS = [
+  {
+    id: 'free',
+    title: 'Free',
+    isRecommended: false,
+    features: [
+      '1 recipe per day',
+      'Manual ingredient entry only',
+      'Ads included'
+    ],
+    icon: 'gift-outline' as const,
+    color: '#6B7280',
+    buttonText: 'Current Plan'
+  },
+  {
+    id: 'weekly',
+    title: 'Weekly',
+    isRecommended: false,
+    features: [
+      'Up to 3 AI-generated recipes per day',
+      '3 different recipe options per search',
+      'Includes image recognition (Cloud Vision)',
+      'No ads',
+      'Save to favorites'
+    ],
+    icon: 'flash' as const,
+    color: '#10B981',
+    buttonText: 'Start Now'
+  },
+  {
+    id: 'monthly',
+    title: 'Monthly',
+    isRecommended: true,
+    features: [
+      'Up to 5 AI recipes per day',
+      '3 different recipe options per search',
+      'No ads',
+      'Access to recipe history',
+      '"What should I eat tonight?" feature'
+    ],
+    icon: 'star' as const,
+    color: '#3B82F6',
+    buttonText: 'Start Now'
+  }
+];
+
+export default function SubscriptionScreen() {
+  const navigation = useNavigation();
+  const { isPremium, refreshSubscriptionStatus } = useSubscription();
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
-  const { setIsPremium } = useSubscription();
+  const [selectedPlan, setSelectedPlan] = useState('monthly');
+  const [countryInfo, setCountryInfo] = useState<{
+    country: string;
+    currency: string;
+    pricing: any;
+    locale: string;
+    region: string;
+  } | null>(null);
 
   useEffect(() => {
-    loadOfferings();
+    loadData();
   }, []);
 
-  const loadOfferings = async () => {
+  const loadData = async () => {
     try {
-      const offerings = await purchaseService.getOfferings();
-      setPackages(offerings);
+      const purchaseService = PurchaseService.getInstance();
+      
+      // Get both packages and country pricing info
+      const [availablePackages, countryPricing] = await Promise.all([
+        purchaseService.getOfferings(),
+        Promise.resolve(purchaseService.getCountryPricing())
+      ]);
+      
+      setPackages(availablePackages);
+      setCountryInfo(countryPricing);
+      
+      console.log('Loaded pricing for country:', countryPricing);
     } catch (error) {
-      Alert.alert('Error', 'An error occurred while loading packages.');
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePurchase = async (packageIdentifier: string) => {
+  const handlePurchase = async (planId: string) => {
+    if (planId === 'free') return;
+    
+    setPurchasing(true);
+    setSelectedPlan(planId);
+    
     try {
-      setPurchasing(true);
-      const success = await purchaseService.purchasePackage(packageIdentifier);
+      const purchaseService = PurchaseService.getInstance();
+      // Map plan ID to package identifier
+      const packageId = planId === 'weekly' ? 'weekly_premium' : 'monthly_premium';
+      const success = await purchaseService.purchasePackage(packageId);
+      
       if (success) {
-        setIsPremium(true);
-        Alert.alert('Success', 'Your premium subscription is now active!', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        await refreshSubscriptionStatus();
+        navigation.goBack();
       }
-    } catch (error: any) {
-      if (error?.code !== 'E_USER_CANCELLED') {
-        Alert.alert('Error', 'An error occurred during the purchase process.');
-      }
+    } catch (error) {
+      console.error('Error during purchase:', error);
     } finally {
       setPurchasing(false);
     }
   };
 
   const handleRestore = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
+      const purchaseService = PurchaseService.getInstance();
       const success = await purchaseService.restorePurchases();
+      
       if (success) {
-        setIsPremium(true);
-        Alert.alert('Success', 'Your subscription has been restored!', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
-      } else {
-        Alert.alert('Info', 'No active subscription found to restore.');
+        await refreshSubscriptionStatus();
+        navigation.goBack();
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to restore subscription.');
+      console.error('Error restoring purchases:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCountryChange = () => {
+    Alert.alert(
+      'Select Your Region',
+      'Choose your region for accurate pricing:',
+      [
+        ...COUNTRY_OPTIONS.map(country => ({
+          text: `${country.flag} ${country.name} (${country.currency})`,
+          onPress: () => changeCountry(country.code as 'TR' | 'US' | 'CA' | 'DEFAULT')
+        })),
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
+  const changeCountry = async (countryCode: 'TR' | 'US' | 'CA' | 'DEFAULT') => {
+    setLoading(true);
+    try {
+      const purchaseService = PurchaseService.getInstance();
+      await purchaseService.setCountryOverride(countryCode);
+      
+      // Reload pricing data
+      await loadData();
+    } catch (error) {
+      console.error('Error changing country:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getPriceForPlan = (planId: string) => {
+    if (!countryInfo || planId === 'free') return { price: '$0', period: '' };
+    
+    const currencySymbol = CURRENCY_SYMBOLS[countryInfo.currency as keyof typeof CURRENCY_SYMBOLS] || countryInfo.currency;
+    
+    if (planId === 'weekly') {
+      return {
+        price: `${currencySymbol}${countryInfo.pricing.weekly.price}`,
+        period: '/week'
+      };
+    } else if (planId === 'monthly') {
+      return {
+        price: `${currencySymbol}${countryInfo.pricing.monthly.price}`,
+        period: '/month'
+      };
+    }
+    
+    return { price: '$0', period: '' };
+  };
+
+  const getCountryFlag = () => {
+    if (!countryInfo) return '🌍';
+    
+    if (countryInfo.country === 'US' || countryInfo.country === 'CA') {
+      return COUNTRY_FLAGS[countryInfo.country as keyof typeof COUNTRY_FLAGS];
+    } else if (countryInfo.country === 'TR') {
+      return COUNTRY_FLAGS['TR'];
+    } else {
+      return COUNTRY_FLAGS['DEFAULT'];
+    }
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
-        
-        {/* Background Gradient */}
-        <LinearGradient
-          colors={['#1a1a2e', '#16213e', '#0f3460'] as const}
-          style={styles.backgroundGradient}
+      <View style={styles.loadingContainer}>
+        <LottieView
+          source={require('../../assets/cooking.json')}
+          autoPlay
+          loop
+          style={styles.loadingAnimation}
         />
-
-        <View style={styles.loadingContainer}>
-          <LinearGradient
-            colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] as const}
-            style={styles.loadingCard}
-          >
-            <ActivityIndicator size="large" color="#667eea" />
-            <Text style={styles.loadingText}>Loading subscription plans...</Text>
-          </LinearGradient>
-        </View>
-      </SafeAreaView>
+        <Text style={styles.loadingText}>Loading pricing...</Text>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
-      {/* Background Gradient */}
-      <LinearGradient
-        colors={['#1a1a2e', '#16213e', '#0f3460'] as const}
-        style={styles.backgroundGradient}
-      />
-
-      <TouchableOpacity
+      {/* Back Button */}
+      <TouchableOpacity 
         style={styles.backButton}
         onPress={() => navigation.goBack()}
-        activeOpacity={0.8}
       >
-        <Ionicons name="close" size={24} color="#FFFFFF" />
+        <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
       </TouchableOpacity>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Header */}
         <View style={styles.header}>
-          <LinearGradient
-            colors={['#667eea', '#764ba2'] as const}
-            style={styles.premiumIcon}
-          >
-            <Ionicons name="star" size={32} color="#FFFFFF" />
-          </LinearGradient>
-          <Text style={styles.title}>SnapCook AI Premium</Text>
+          <View style={styles.iconContainer}>
+            {/* App icon instead of Ionicons */}
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.title}>Upgrade to Premium</Text>
           <Text style={styles.subtitle}>
-            Unlock the full potential of AI-powered cooking
+            Get smarter meals, every day. Unlock AI-powered recipes with rich nutrition and image recognition.
           </Text>
-          <View style={styles.decorativeLine} />
-        </View>
-
-        <View style={styles.featuresContainer}>
-          <Text style={styles.sectionTitle}>Premium Features</Text>
-          <View style={styles.featureGrid}>
-            {features.map((feature) => (
-              <View key={feature.id} style={styles.featureCard}>
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] as const}
-                  style={styles.featureGradient}
-                >
-                  <LinearGradient
-                    colors={feature.gradient}
-                    style={styles.featureIcon}
-                  >
-                    <Ionicons name={feature.icon as any} size={24} color="#FFFFFF" />
-                  </LinearGradient>
-                  <Text style={styles.featureText}>{feature.title}</Text>
-                </LinearGradient>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {packages.length > 0 && (
-          <View style={styles.packagesContainer}>
-            <Text style={styles.sectionTitle}>Choose Your Plan</Text>
-            {packages.map((pkg) => (
-              <TouchableOpacity
-                key={pkg.identifier}
-                style={styles.packageCard}
-                onPress={() => handlePurchase(pkg.identifier)}
-                disabled={purchasing}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] as const}
-                  style={styles.packageGradient}
-                >
-                  <View style={styles.packageContent}>
-                    <View style={styles.packageInfo}>
-                      <Text style={styles.packageTitle}>{pkg.title}</Text>
-                      <Text style={styles.packagePeriod}>{pkg.period}</Text>
-                    </View>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.packagePrice}>{pkg.price}</Text>
-                      <Ionicons name="chevron-forward" size={20} color="rgba(255, 255, 255, 0.6)" />
-                    </View>
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <View style={styles.actionsContainer}>
-          <TouchableOpacity
-            style={styles.restoreButton}
-            onPress={handleRestore}
-            disabled={loading}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['rgba(255, 255, 255, 0.1)', 'rgba(255, 255, 255, 0.05)'] as const}
-              style={styles.restoreGradient}
-            >
-              <Ionicons name="refresh-outline" size={20} color="rgba(255, 255, 255, 0.8)" />
-              <Text style={styles.restoreButtonText}>Restore Previous Purchases</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.termsContainer}>
-          <Text style={styles.termsText}>
-            Payment will be charged to your {Platform.OS === 'ios' ? 'iTunes' : 'Google Play'} account at confirmation of purchase. Subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period. You can manage and cancel your subscription by going to your {Platform.OS === 'ios' ? 'iTunes' : 'Google Play'} account settings.
-          </Text>
-        </View>
-      </ScrollView>
-
-      {purchasing && (
-        <View style={styles.loadingOverlay}>
-          <LinearGradient
-            colors={['rgba(0, 0, 0, 0.8)', 'rgba(0, 0, 0, 0.9)'] as const}
-            style={styles.overlayGradient}
-          >
-            <View style={styles.purchasingCard}>
-              <ActivityIndicator size="large" color="#667eea" />
-              <Text style={styles.purchasingText}>Processing your purchase...</Text>
+          
+          {/* Country/Currency Info */}
+          {countryInfo && (
+            <View style={styles.countryInfo}>
+              <Text style={styles.countryFlag}>{getCountryFlag()}</Text>
+              <Text style={styles.countryText}>
+                Pricing in {countryInfo.currency}
+                {countryInfo.country !== 'DEFAULT' && ` • ${countryInfo.country}`}
+              </Text>
             </View>
-          </LinearGradient>
+          )}
         </View>
-      )}
+
+        {/* Pricing Plans */}
+        <View style={styles.plansContainer}>
+          {PRICING_PLANS.map((plan) => {
+            const priceInfo = getPriceForPlan(plan.id);
+            
+            return (
+              <View key={plan.id} style={[
+                styles.planCard,
+                plan.isRecommended && styles.recommendedCard
+              ]}>
+                {plan.isRecommended && (
+                  <View style={styles.recommendedBadge}>
+                    <Ionicons name="star" size={16} color="#FFFFFF" />
+                    <Text style={styles.recommendedText}>MOST POPULAR</Text>
+                  </View>
+                )}
+                
+                <View style={styles.planHeader}>
+                  <View style={[styles.planIcon, { backgroundColor: `${plan.color}15` }]}>
+                    <Ionicons name={plan.icon} size={20} color={plan.color} />
+                  </View>
+                  <Text style={styles.planTitle}>{plan.title}</Text>
+                  <View style={styles.priceContainer}>
+                    <Text style={[styles.planPrice, { color: plan.color }]}>
+                      {priceInfo.price}
+                    </Text>
+                    {priceInfo.period && (
+                      <Text style={styles.planPeriod}>{priceInfo.period}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.featuresContainer}>
+                  {plan.features.map((feature, index) => (
+                    <View key={index} style={styles.featureItem}>
+                      <View style={[styles.featureCheck, { backgroundColor: `${plan.color}20` }]}>
+                        <Ionicons name="checkmark" size={12} color={plan.color} />
+                      </View>
+                      <Text style={styles.featureText}>{feature}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.planButton,
+                    plan.id === 'free' ? styles.freeButton : { backgroundColor: plan.color },
+                    plan.isRecommended && styles.recommendedButton
+                  ]}
+                  onPress={() => handlePurchase(plan.id)}
+                  disabled={purchasing || plan.id === 'free'}
+                >
+                  {purchasing && selectedPlan === plan.id ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={[
+                      styles.planButtonText,
+                      plan.id === 'free' && styles.freeButtonText
+                    ]}>
+                      {plan.buttonText}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Additional Info */}
+        <View style={styles.additionalInfo}>
+          <View style={styles.infoItem}>
+            <Ionicons name="shield-checkmark" size={18} color="#10B981" />
+            <Text style={styles.infoText}>Cancel anytime, no commitment</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Ionicons name="refresh" size={18} color="#10B981" />
+            <Text style={styles.infoText}>Instant access to all features</Text>
+          </View>
+          <View style={styles.infoItem}>
+            <Ionicons name="card" size={18} color="#10B981" />
+            <Text style={styles.infoText}>Secure payment via {Platform.OS === 'ios' ? 'App Store' : 'Google Play'}</Text>
+          </View>
+        </View>
+
+        {/* Restore Purchases */}
+        <TouchableOpacity
+          style={styles.restoreButton}
+          onPress={handleRestore}
+          disabled={loading}
+        >
+          <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+        </TouchableOpacity>
+
+        {/* Terms */}
+        <Text style={styles.termsText}>
+          Subscriptions auto-renew unless cancelled 24 hours before the period ends. 
+          Manage in {Platform.OS === 'ios' ? 'App Store' : 'Google Play'} settings.
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -276,249 +394,257 @@ export default function SubscriptionScreen({ navigation }: SubscriptionScreenPro
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#0F172A',
   },
-  backgroundGradient: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  scrollView: {
+    flex: 1,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 25,
-  },
-  loadingCard: {
-    padding: 40,
-    borderRadius: 24,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: '#0F172A',
+  },
+  loadingAnimation: {
+    width: 120,
+    height: 120,
   },
   loadingText: {
-    marginTop: 20,
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
+    color: '#94A3B8',
+    fontSize: 16,
+    marginTop: 16,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 25,
-  },
+  // Remove closeButton, add backButton
   backButton: {
     position: 'absolute',
     top: 60,
-    right: 25,
+    left: 20,
     zIndex: 1,
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   header: {
-    marginTop: 100,
     alignItems: 'center',
-    marginBottom: 40,
+    paddingTop: 80,
+    paddingBottom: 32,
+    paddingHorizontal: 24,
   },
-  premiumIcon: {
+  iconContainer: {
     width: 80,
     height: 80,
-    borderRadius: 20,
+    borderRadius: 22,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#667eea',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  appIcon: {
+    width: 80,
+    height: 80,
   },
   title: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 17,
-    color: 'rgba(255, 255, 255, 0.8)',
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 24,
-  },
-  decorativeLine: {
-    width: 60,
-    height: 3,
-    backgroundColor: '#667eea',
-    borderRadius: 2,
-  },
-  featuresContainer: {
-    marginBottom: 40,
-  },
-  sectionTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 20,
-    letterSpacing: -0.3,
+    marginBottom: 10,
+    textAlign: 'center',
   },
-  featureGrid: {
+  subtitle: {
+    fontSize: 15,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  countryInfo: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  featureCard: {
-    width: '48%',
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  featureGradient: {
-    padding: 16,
     alignItems: 'center',
-    minHeight: 120,
-    justifyContent: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
   },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+  countryFlag: {
+    fontSize: 18,
+  },
+  countryText: {
+    color: '#3B82F6',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  countryChangeButton: {
+    padding: 6,
+  },
+  detectionInfo: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 6,
+  },
+  plansContainer: {
+    paddingHorizontal: 12,
+    gap: 10,
+    marginBottom: 28,
+  },
+  planCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 2,
+  },
+  recommendedCard: {
+    borderColor: '#3B82F6',
+    transform: [{ scale: 1.01 }],
+    shadowColor: '#3B82F6',
+    shadowOpacity: 0.22,
+    backgroundColor: '#1E293B',
+  },
+  recommendedBadge: {
+    position: 'absolute',
+    top: -7,
+    left: 14,
+    right: 14,
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
+  },
+  recommendedText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  planHeader: {
     alignItems: 'center',
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginTop: 4,
   },
-  featureText: {
-    fontSize: 14,
+  planIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 7,
+  },
+  planTitle: {
+    fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  packagesContainer: {
-    marginBottom: 40,
-  },
-  packageCard: {
-    marginBottom: 16,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 8,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 12,
-  },
-  packageGradient: {
-    padding: 24,
-  },
-  packageContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  packageInfo: {
-    flex: 1,
-  },
-  packageTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
     marginBottom: 4,
-    letterSpacing: -0.3,
-  },
-  packagePeriod: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '500',
   },
   priceContainer: {
     flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'center',
+  },
+  planPrice: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  planPeriod: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginLeft: 3,
+  },
+  featuresContainer: {
+    marginBottom: 14,
+    gap: 7,
+  },
+  featureItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 7,
+  },
+  featureCheck: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    marginTop: 1,
   },
-  packagePrice: {
-    fontSize: 24,
-    fontWeight: '800',
+  featureText: {
+    fontSize: 12,
+    color: '#CBD5E1',
+    flex: 1,
+    lineHeight: 16,
+  },
+  planButton: {
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  freeButton: {
+    backgroundColor: '#374151',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
+  recommendedButton: {
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  planButtonText: {
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    fontSize: 13,
+    fontWeight: '600',
   },
-  actionsContainer: {
-    marginBottom: 30,
+  freeButtonText: {
+    color: '#9CA3AF',
+  },
+  additionalInfo: {
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  infoText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    flex: 1,
   },
   restoreButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  restoreGradient: {
-    flexDirection: 'row',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
   },
   restoreButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  termsContainer: {
-    paddingBottom: 40,
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '500',
   },
   termsText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.6)',
-    lineHeight: 18,
+    fontSize: 11,
+    color: '#64748B',
     textAlign: 'center',
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  overlayGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  purchasingCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    padding: 30,
-    borderRadius: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  purchasingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontWeight: '500',
+    marginHorizontal: 24,
+    marginBottom: 24,
+    lineHeight: 16,
   },
 }); 

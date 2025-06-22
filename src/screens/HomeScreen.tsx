@@ -3,6 +3,9 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Sta
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { COLORS } from '../utils/colors';
+import { useSubscription } from '../context/SubscriptionContext';
+import UsageService from '../services/usageService';
 
 import { RootStackParamList } from '../../App';
 import { useApp } from '../context/AppContext';
@@ -11,9 +14,28 @@ import { useTranslation } from '../utils/i18n';
 type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
+  const navigation = useNavigation<any>();
   const { state } = useApp();
   const { t } = useTranslation();
+  const { isPremium } = useSubscription();
+  const [usageStats, setUsageStats] = React.useState<{
+    used: number;
+    limit: number;
+  } | null>(null);
+
+  React.useEffect(() => {
+    loadUsageStats();
+  }, []);
+
+  const loadUsageStats = async () => {
+    try {
+      const usageService = UsageService.getInstance();
+      const stats = await usageService.getUsageStats();
+      setUsageStats(stats);
+    } catch (error) {
+      console.error('Error loading usage stats:', error);
+    }
+  };
 
   const features = [
     {
@@ -37,10 +59,34 @@ export default function HomeScreen() {
       title: 'Saved Recipes',
       subtitle: 'Access your curated collection of favorite recipes',
       icon: 'bookmark',
-      onPress: () => navigation.navigate('SavedRecipes'),
+      onPress: () => navigation.navigate('Saved'),
       color: '#F59E0B',
     },
   ];
+
+  const renderFeatureButton = (
+    icon: string,
+    title: string,
+    description: string,
+    onPress: () => void,
+    color: string = COLORS.primary,
+    key: number
+  ) => (
+    <TouchableOpacity
+      key={key}
+      style={styles.featureButton}
+      onPress={onPress}
+    >
+      <View style={[styles.iconContainer, { backgroundColor: color + '20' }]}>
+        <Ionicons name={icon as any} size={24} color={color} />
+      </View>
+      <View style={styles.featureContent}>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDescription}>{description}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#666" />
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -65,27 +111,36 @@ export default function HomeScreen() {
 
         {/* Features */}
         <View style={styles.featuresContainer}>
-          {features.map((feature) => (
-            <TouchableOpacity
-              key={feature.id}
-              style={styles.featureCard}
-              onPress={feature.onPress}
-              activeOpacity={0.8}
-            >
-              <View style={styles.featureContent}>
-                <View style={[styles.iconContainer, { backgroundColor: feature.color }]}>
-                  <Ionicons name={feature.icon as any} size={24} color="#FFFFFF" />
-                </View>
-                <View style={styles.textContainer}>
-                  <Text style={styles.featureTitle}>{feature.title}</Text>
-                  <Text style={styles.featureSubtitle}>{feature.subtitle}</Text>
-                </View>
-                <View style={styles.arrowContainer}>
-                  <Ionicons name="chevron-forward" size={20} color="#6B7280" />
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+          {features.map((feature) => 
+            renderFeatureButton(
+              feature.icon,
+              feature.title,
+              feature.subtitle,
+              feature.onPress,
+              feature.color,
+              feature.id
+            )
+          )}
+        </View>
+
+        {/* Premium Section */}
+        <View style={styles.premiumSection}>
+          <TouchableOpacity
+            style={styles.premiumButton}
+            onPress={() => navigation.navigate('Subscription' as never)}
+          >
+            <View style={styles.premiumContent}>
+              <Ionicons name={isPremium ? "star" : "star-outline"} size={20} color={COLORS.primary} />
+              <Text style={styles.premiumText}>
+                {isPremium ? 'Premium' : 'Get Premium'}
+              </Text>
+            </View>
+            {isPremium && usageStats && (
+              <Text style={styles.usageText}>
+                {usageStats.used}/{usageStats.limit} credits left today
+              </Text>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* AI Insights Card */}
@@ -122,6 +177,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 40,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center', // Changed from 'flex-start' to 'center' for alignment
   },
   greetingContainer: {
     alignItems: 'flex-start',
@@ -149,8 +207,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 16,
   },
-  featureCard: {
+  featureButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#1F1F1F',
+    padding: 16,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#2D2D2D',
@@ -163,20 +224,15 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  featureContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-  },
   iconContainer: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
   },
-  textContainer: {
+  featureContent: {
     flex: 1,
   },
   featureTitle: {
@@ -186,19 +242,39 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     letterSpacing: -0.2,
   },
-  featureSubtitle: {
+  featureDescription: {
     fontSize: 15,
     color: '#9CA3AF',
     lineHeight: 20,
     fontWeight: '400',
   },
-  arrowContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#2D2D2D',
-    justifyContent: 'center',
+  premiumSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  premiumButton: {
+    backgroundColor: COLORS.primary + '10',
+    padding: 12, // Reduced padding for less prominence
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  premiumContent: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4, // Reduced gap for tighter layout
+  },
+  premiumText: {
+    color: COLORS.primary,
+    fontSize: 14, // Reduced font size for less prominence
+    fontWeight: '500', // Reduced font weight for less prominence
+  },
+  usageText: {
+    fontSize: 13,
+    color: COLORS.text.secondary,
+    textAlign: 'center',
+    marginTop: 8,
+    opacity: 0.8,
   },
   insightsSection: {
     paddingHorizontal: 24,

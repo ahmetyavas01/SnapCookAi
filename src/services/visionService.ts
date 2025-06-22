@@ -1,4 +1,8 @@
 import { GOOGLE_CLOUD_API_KEY } from '@env';
+import KeyManagementService from './keyManagementService';
+import UsageService from './usageService';
+import { Alert } from 'react-native';
+import { useSubscription } from '../context/SubscriptionContext';
 
 export interface DetectedIngredient {
   name: string;
@@ -155,7 +159,37 @@ const CONFIDENCE_THRESHOLD = 0.7;
 
 export async function detectIngredients(imageBase64: string): Promise<DetectedIngredient[]> {
   try {
-    const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_CLOUD_API_KEY}`, {
+    // Check usage limits first
+    const usageService = UsageService.getInstance();
+    const canUseService = await usageService.canUseService();
+    
+    if (!canUseService.allowed) {
+      Alert.alert(
+        'Usage Limit Reached',
+        'You have reached your daily limit. Upgrade to premium for more credits!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Get Premium', 
+            onPress: () => {
+              // @ts-ignore - Navigation will be handled by the component
+              global.navigation?.navigate('Subscription');
+            }
+          }
+        ]
+      );
+      return [];
+    }
+
+    const keyManager = KeyManagementService.getInstance();
+    
+    const apiKey = await keyManager.getApiKey('GOOGLE_CLOUD');
+    
+    if (!apiKey) {
+      throw new Error('Google Cloud API key not found');
+    }
+
+    const response = await fetch(`https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -184,7 +218,11 @@ export async function detectIngredients(imageBase64: string): Promise<DetectedIn
       throw new Error(`Google Cloud Vision API error: ${errorData}`);
     }
 
-    const data: GoogleVisionResponse = await response.json();
+    const data = await response.json();
+    
+    // API çağrısı başarılı olduysa kullanım sayısını artır
+    await usageService.incrementUsage();
+
     const detectedItems = new Set<string>();
     const confidenceScores: { [key: string]: number } = {};
 

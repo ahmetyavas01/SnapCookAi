@@ -8,29 +8,60 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0F172A",
+      "resizeMode": "contain"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ahmetyavas.snapcookai",
+      "bundleIdentifier": "com.ahmetyavas.snapcook-ai",
       "buildNumber": "1",
       "infoPlist": {
-        "NSCameraUsageDescription": "We need access to your camera to analyze ingredients from photos",
-        "NSPhotoLibraryUsageDescription": "We need access to your photo library to analyze ingredients from saved photos"
+        "NSCameraUsageDescription": "SnapCook AI needs camera access to analyze ingredients from photos and generate AI-powered recipes",
+        "NSPhotoLibraryUsageDescription": "SnapCook AI needs photo library access to analyze ingredients from saved photos and generate personalized recipes",
+        "ITSAppUsesNonExemptEncryption": false
       }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.ahmetyavas.snapcook_ai",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "70bb0634-4664-4769-91a4-d553c83549a9"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SnapCook AI needs access to your photos to analyze ingredients and create recipes.",
+          "cameraPermission": "SnapCook AI needs camera access to capture ingredient photos for recipe generation."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F172A",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "owner": "ahmetyavas01"
   }
 }
