@@ -1,63 +1,73 @@
-# Recipe AI App
+Fotoğraflardan malzemeleri algılayarak tarifler oluşturan, React Native ile geliştirilmiş mobil uygulama. Expo ve OpenAI kullanılarak inşa edilmiştir.
 
-A React Native mobile application that uses AI to detect ingredients from photos and generate recipes. Built with Expo and OpenAI.
+Özellikler
 
-## Features
+📸 Vision AI ile fotoğraflardan malzeme tespiti
 
-- 📸 Ingredient detection from photos using Vision AI
-- 🍳 AI-powered recipe generation
-- 🌍 Multiple cuisine types support
-- 🍽️ Different meal type options
-- 💾 Save favorite recipes
-- 📱 Beautiful modern UI
-- 📊 Nutrition information per serving
+🍳 Yapay zekâ destekli tarif oluşturma
 
-## Tech Stack
+🌍 Farklı mutfak türleri desteği
 
-- React Native with Expo
-- TypeScript
-- OpenAI API
-- Google Cloud Vision API
-- AsyncStorage for local storage
-- React Navigation
+🍽️ Öğün tipine göre seçenekler
 
-## Getting Started
+💾 Favori tarifleri kaydetme
 
-1. Clone the repository
-```bash
+📱 Modern ve şık kullanıcı arayüzü
+
+📊 Porsiyon başına besin değeri bilgisi
+
+Teknoloji Yığını
+
+Expo ile React Native
+
+TypeScript
+
+OpenAI API
+
+Google Cloud Vision API
+
+Yerel depolama için AsyncStorage
+
+React Navigation
+
+Başlangıç
+
+Depoyu klonla
+
 git clone https://github.com/yourusername/recipe-ai-app.git
-```
 
-2. Install dependencies
-```bash
+
+Bağımlılıkları yükle
+
 cd recipe-ai-app
 npm install
-```
 
-3. Create a `.env` file in the root directory and add your API keys:
-```
-OPENAI_API_KEY=your_openai_api_key
-GOOGLE_CLOUD_API_KEY=your_google_cloud_api_key
-```
 
-4. Start the development server
-```bash
+Projenin kök dizininde .env dosyası oluştur ve API anahtarlarını ekle:
+
+OPENAI_API_KEY=senin_openai_api_key
+GOOGLE_CLOUD_API_KEY=senin_google_cloud_api_key
+
+
+Geliştirme sunucusunu başlat
+
 npx expo start
-```
 
-## Environment Setup
+Geliştirme Ortamı Kurulumu
 
-Make sure you have the following installed:
-- Node.js
-- npm or yarn
-- Expo CLI
-- iOS Simulator (for iOS development)
-- Android Studio (for Android development)
+Aşağıdakilerin kurulu olduğundan emin ol:
 
-## Contributing
+Node.js
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+npm veya yarn
 
-## İletişim 📬
+Expo CLI
 
-Sorularınız için: support@recipeai.app 
+iOS Simulator (iOS geliştirme için)
+
+Android Studio (Android geliştirme için)
+
+
+İletişim 📬
+
+Sorularınız için: ahmet0yavas@gmail.com
